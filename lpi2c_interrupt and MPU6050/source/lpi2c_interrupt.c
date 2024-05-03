@@ -1,0 +1,186 @@
+/*
+ * Copyright (c) 2015, Freescale Semiconductor, Inc.
+ * Copyright 2016-2017 NXP
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#include "pin_mux.h"
+#include "clock_config.h"
+#include "board.h"
+#include "fsl_debug_console.h"
+#include "fsl_lpi2c.h"
+
+/*******************************************************************************
+ * Definitions
+ ******************************************************************************/
+#define EXAMPLE_LPI2C_MASTER_BASEADDR LPI2C2
+//#define EXAMPLE_LPI2C_SLAVE_BASEADDR  LPI2C1
+char tx_data[14]="hii!welcome";
+/* Get frequency of lpi2c clock */
+#define LPI2C_CLOCK_FREQUENCY CLOCK_GetLPFlexCommClkFreq(1u)
+
+#define LPI2C_MASTER_CLOCK_FREQUENCY LPI2C_CLOCK_FREQUENCY
+#define LPI2C_SLAVE_CLOCK_FREQUENCY  LPI2C_CLOCK_FREQUENCY
+
+#define LPI2C_MASTER_IRQ LP_FLEXCOMM2_IRQn
+#define LPI2C_SLAVE_IRQ  LP_FLEXCOMM1_IRQn
+
+#define LPI2C_MASTER_IRQHandler LP_FLEXCOMM2_IRQHandler
+#define LPI2C_SLAVE_IRQHandler  LP_FLEXCOMM1_IRQHandler
+#define LPI2C_MASTER_SLAVE_ADDR_7BIT (0x68U <<1)
+#define LPI2C_BAUDRATE               100000U
+#define LPI2C_DATA_LENGTH            32U
+
+/*******************************************************************************
+ * Prototypes
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Variables
+ ******************************************************************************/
+
+
+uint8_t g_slave_buff[LPI2C_DATA_LENGTH]  = {0};
+uint8_t g_master_buff[LPI2C_DATA_LENGTH] = {0};
+volatile uint8_t g_masterTxIndex         = 0U;
+volatile uint8_t g_masterRxIndex         = 0U;
+volatile uint8_t g_slaveTxIndex          = 0U;
+volatile uint8_t g_slaveRxIndex          = 0U;
+volatile bool g_masterReadBegin          = false;
+
+/*******************************************************************************
+ * Code
+ ******************************************************************************/
+
+void LPI2C_MASTER_IRQHandler(void)
+{
+    uint32_t flags = 0U;
+    status_t reVal = kStatus_Fail;
+    /* Get interrupt status flags */
+    flags = LPI2C_MasterGetStatusFlags(EXAMPLE_LPI2C_MASTER_BASEADDR);
+
+    if (flags & kLPI2C_MasterTxReadyFlag)
+    {
+        /* If tx Index < LPI2C_DATA_LENGTH, master send->slave receive transfer is ongoing. */
+        if (g_masterTxIndex < LPI2C_DATA_LENGTH)
+        {
+            reVal = LPI2C_MasterSend(EXAMPLE_LPI2C_MASTER_BASEADDR, &g_master_buff[g_masterTxIndex++], 1);
+            if (reVal != kStatus_Success)
+            {
+                return;
+            }
+            /* The last byte */
+            if (g_masterTxIndex == LPI2C_DATA_LENGTH)
+            {
+                /* Master send stop command. */
+                reVal = LPI2C_MasterStop(EXAMPLE_LPI2C_MASTER_BASEADDR);
+                if (reVal != kStatus_Success)
+                {
+                    return;
+                }
+                /* Disable master Tx interrupt otherwise the Tx interrupt will always works */
+                LPI2C_MasterDisableInterrupts(EXAMPLE_LPI2C_MASTER_BASEADDR, kLPI2C_MasterTxReadyFlag);
+            }
+        }
+    }
+
+    if (flags & kLPI2C_MasterRxReadyFlag)
+    {
+        /* If rx Index < LPI2C_DATA_LENGTH, master receive->slave send transfer is ongoing. */
+        if (g_masterRxIndex < LPI2C_DATA_LENGTH)
+        {
+            g_master_buff[g_masterRxIndex++] = EXAMPLE_LPI2C_MASTER_BASEADDR->MRDR;
+            if (g_masterRxIndex == LPI2C_DATA_LENGTH - 1U)
+            {
+                /* Master send stop command. */
+                reVal = LPI2C_MasterStop(EXAMPLE_LPI2C_MASTER_BASEADDR);
+                if (reVal != kStatus_Success)
+                {
+                    return;
+                }
+                /* Disable master Rx interrupt otherwise the Rx interrupt will always works */
+                LPI2C_MasterDisableInterrupts(EXAMPLE_LPI2C_MASTER_BASEADDR, kLPI2C_MasterTxReadyFlag);
+            }
+        }
+    }
+    SDK_ISR_EXIT_BARRIER;
+}
+/*!
+ * @brief Main function
+ */
+int main(void)
+{
+    lpi2c_master_config_t masterConfig = {0};
+    status_t reVal                     = kStatus_Fail;
+
+    /* attach FRO 12M to FLEXCOMM4 (debug console) */
+    CLOCK_SetClkDiv(kCLOCK_DivFlexcom4Clk, 1u);
+    CLOCK_AttachClk(BOARD_DEBUG_UART_CLK_ATTACH);
+
+    /* attach FRO 12M to FLEXCOMM1 */
+    CLOCK_SetClkDiv(kCLOCK_DivFlexcom1Clk, 1u);
+    CLOCK_AttachClk(kFRO12M_to_FLEXCOMM1);
+
+    /* attach FRO 12M to FLEXCOMM2 */
+    CLOCK_SetClkDiv(kCLOCK_DivFlexcom2Clk, 1u);
+    CLOCK_AttachClk(kFRO12M_to_FLEXCOMM2);
+
+    BOARD_InitBootPins();
+    BOARD_InitBootClocks();
+    BOARD_InitDebugConsole();
+
+    PRINTF("\r\nLPI2C example\r\n");
+
+    /* Enable master and slave NVIC interrupt. */
+    EnableIRQ(LPI2C_MASTER_IRQ);
+   // EnableIRQ(LPI2C_SLAVE_IRQ);
+
+    /* Set lpi2c slave interrupt priority higher. */
+#if defined(__CORTEX_M) && (__CORTEX_M == 0U) && defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && \
+    (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
+    if (LPI2C_SLAVE_IRQ < FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    {
+        NVIC_SetPriority(LPI2C_SLAVE_IRQ, 0);
+    }
+#else
+    NVIC_SetPriority(LPI2C_SLAVE_IRQ, 0);
+#endif
+    NVIC_SetPriority(LPI2C_MASTER_IRQ, 1);
+
+    /* Setup lpi2c master */
+    /*
+     * masterConfig.debugEnable = false;
+     * masterConfig.ignoreAck = false;
+     * masterConfig.pinConfig = kLPI2C_2PinOpenDrain;
+     * masterConfig.baudRate_Hz = 100000U;
+     * masterConfig.busIdleTimeout_ns = 0;
+     * masterConfig.pinLowTimeout_ns = 0;
+     * masterConfig.sdaGlitchFilterWidth_ns = 0;
+     * masterConfig.sclGlitchFilterWidth_ns = 0;
+     */
+    LPI2C_MasterGetDefaultConfig(&masterConfig);
+    masterConfig.baudRate_Hz = LPI2C_BAUDRATE;
+
+    LPI2C_MasterInit(EXAMPLE_LPI2C_MASTER_BASEADDR, &masterConfig, LPI2C_MASTER_CLOCK_FREQUENCY);
+
+    /* Master start and send address to slave. */
+    reVal = LPI2C_MasterStart(EXAMPLE_LPI2C_MASTER_BASEADDR, LPI2C_MASTER_SLAVE_ADDR_7BIT, kLPI2C_Write);
+    if (reVal != kStatus_Success)
+    {
+        return -1;
+    }
+    else
+    {
+    	for(int i=0;i<sizeof(tx_data);i++)
+    	{
+           LPI2C_MasterSend(LPI2C2,tx_data ,1);
+           PRINTF("%c",tx_data[i]);
+    	}
+        PRINTF("\r\n data Send");
+     }
+    /*while (1)
+    {
+    }*/
+}

@@ -1,0 +1,6 @@
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\uart_cmsis_lpuart\drivers/fsl_clock.h:1389:20:CLOCK_EnableClock	24	static
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\uart_cmsis_lpuart\drivers/fsl_edma.h:678:20:EDMA_SetChannelMux	24	static
+../source/cmsis_usart_edma_transfer.c:48:6:delay	24	static
+../source/cmsis_usart_edma_transfer.c:54:10:LPUART4_GetFreq	8	static
+../source/cmsis_usart_edma_transfer.c:60:6:USART_Callback	16	static
+../source/cmsis_usart_edma_transfer.c:78:5:main	80	static

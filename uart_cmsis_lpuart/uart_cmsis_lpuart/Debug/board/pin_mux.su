@@ -1,0 +1,5 @@
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\uart_cmsis_lpuart\drivers/fsl_clock.h:1389:20:CLOCK_EnableClock	24	static
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\uart_cmsis_lpuart\drivers/fsl_port.h:355:20:PORT_SetPinConfig	32	static
+../board/pin_mux.c:37:6:BOARD_InitBootPins	4	static
+../board/pin_mux.c:62:6:LPUART4_InitPins	16	static
+../board/pin_mux.c:136:6:LPUART4_DeinitPins	16	static

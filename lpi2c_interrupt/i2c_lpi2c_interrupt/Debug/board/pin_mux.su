@@ -1,0 +1,6 @@
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\i2c_lpi2c_interrupt\drivers/fsl_clock.h:1389:20:CLOCK_EnableClock	24	static
+C:\Users\CEINFO\Documents\MCUXpressoIDE_11.9.1_2170\workspace\i2c_lpi2c_interrupt\drivers/fsl_port.h:355:20:PORT_SetPinConfig	32	static
+../board/pin_mux.c:30:6:BOARD_InitBootPins	8	static
+../board/pin_mux.c:58:6:BOARD_InitPins	16	static
+../board/pin_mux.c:130:6:LPI2C1_InitPins	16	static
+../board/pin_mux.c:202:6:LPI2C2_InitPins	16	static
